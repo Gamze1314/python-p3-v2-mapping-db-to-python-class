@@ -3,6 +3,9 @@ from __init__ import CURSOR, CONN
 
 class Department:
 
+    # Dictionary of objects saved to the database.
+    all = {}
+
     def __init__(self, name, location, id=None):
         self.id = id
         self.name = name
@@ -45,6 +48,9 @@ class Department:
         CONN.commit()
 
         self.id = CURSOR.lastrowid
+        #update this method to save the object in local dictionary using table row's PK as dictionary key
+        type(self).all[self.id] = self  #PK serves as dictionary key => self.id 
+
 
     @classmethod
     def create(cls, name, location):
@@ -72,3 +78,63 @@ class Department:
 
         CURSOR.execute(sql, (self.id,))
         CONN.commit()
+
+        # delete the dict entry using id as the key
+        del type(self).all[self.id]
+        # Set the id to None
+        self.id = None
+
+
+    @classmethod
+    def instance_from_db(cls, row):
+        #check the dict for an exiting instance using the rows PK
+
+        department = cls.all.get(row[0]) # ( row => tuple  (id, name, location))
+        if department:
+            #check if attributes of row matches w object attributes
+            department.name = row[1]
+            department.location = row[2]
+        else:
+            #not in the dictionary , create new instance and add to dict
+            department = cls(row[1], row[2])
+            department.id = row[0]
+            cls.all[department.id] = department
+        return department
+
+    @classmethod
+    def get_all(cls): #gets all department instances , returns a list. access [0].name each attribute value w list methods.
+        """Return a list containing a Department object per row in the table"""
+        sql = """
+            SELECT *
+            FROM departments
+        """
+
+        rows = CURSOR.execute(sql).fetchall()
+
+        return [cls.instance_from_db(row) for row in rows]
+    
+    @classmethod
+    def find_by_id(cls, id):
+        """Return a Department object corresponding to the table row matching the specified primary key"""
+        sql = """
+            SELECT *
+            FROM departments
+            WHERE id = ?
+        """
+
+        row = CURSOR.execute(sql, (id,)).fetchone()
+        return cls.instance_from_db(row) if row else None
+    
+
+
+    @classmethod
+    def find_by_name(cls, name):
+        #returns first row matching the given name
+        sql = """
+            SELECT *
+            FROM departments
+            WHERE name is ? 
+        """
+
+        row = CURSOR.execute(sql, (name,)).fetchone()
+        return cls.instance_from_db(row) if row else None
